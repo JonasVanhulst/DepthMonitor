@@ -6,7 +6,7 @@
  *
  * License: MIT LICENSE
  ******************************************/
-
+#include <stdio.h>
 #include <Arduino_HTS221.h>
 #include <Arduino_LPS22HB.h>
 #include <Arduino_LSM9DS1.h>
@@ -97,35 +97,53 @@ void loop()
   }
 
   // Printing the temperature, humidity and pressure data.
-  Serial.printf("%+7.2f°C %+7.2f%% %+7.2f hPa   ", temperature, humidity, pressure);
+  // Serial.print("%+7.2f°C %+7.2f%% %+7.2f hPa   ", temperature, humidity, pressure);
+  Serial.println(temperature);
+  Serial.println("°c");
+  Serial.println(humidity);
+  Serial.println("humidity");
+  Serial.println(pressure);
+  Serial.println("hpa");
 
   /* Checking the accerlero data to print the degrees at every board state.*/
   if (accelX > 0.1)
   {
     accelX = 100 * accelX;
     degreesX = map(accelX, 0, 97, 0, 90);
-    Serial.printf("Tilting up %+5.2f degrees", degreesX);
+    // Serial.print("Tilting up %+5.2f degrees", degreesX);
+    Serial.println("Tilting up");
+    Serial.println(degreesX);
+    Serial.println("degrees");
   }
 
   if (accelX < -0.1)
   {
     accelX = 100 * accelX;
     degreesX = map(accelX, 0, -100, 0, 90);
-    Serial.printf("Tilting down %+5.2f degrees", degreesX);
+    // Serial.print("Tilting down %+5.2f degrees", degreesX);
+    Serial.println("Tilting down");
+    Serial.println(degreesX);
+    Serial.println("degrees");
   }
 
   if (accelY > 0.1)
   {
     accelY = 100 * accelY;
-    degreesY = map(accelXY, 0, 97, 0, 90);
-    Serial.printf("Tilting left %+5.2f degrees", degreesY);
+    degreesY = map(accelY, 0, 97, 0, 90);
+    // Serial.print("Tilting left %+5.2f degrees", degreesY);
+    Serial.println("Tilting left");
+    Serial.println(degreesY);
+    Serial.println("degrees");
   }
 
   if (accelY < -0.1)
   {
     accelY = 100 * accelY;
-    degreesY = map(accelXY, 0, -100, 0, 90);
-    Serial.printf("Tilting right %+5.2f degrees", degreesY);
+    degreesY = map(accelY, 0, -100, 0, 90);
+    // Serial.print("Tilting right %+5.2f degrees", degreesY);
+    Serial.println("Tilting right");
+    Serial.println(degreesY);
+    Serial.println("degrees");
   }
 
   /* Checking the gyroscope values to print the board state. */
