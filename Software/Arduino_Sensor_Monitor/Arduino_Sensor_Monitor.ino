@@ -10,13 +10,10 @@
 #include <Arduino_HTS221.h>
 #include <Arduino_LPS22HB.h>
 #include <Arduino_LSM9DS1.h>
+#include <Arduino_APDS9960.h>
 
 /*
  * TODO
- *
- * Proximity Detection
- * Color Detection ?
- * Gesture Recognition
  * Edge Impulse
  */
 
@@ -37,7 +34,12 @@ void setup()
   while (!Serial)
   {
   }
-
+  
+   // Security to check for failure on the proximity sensor.
+    if (!APDS.begin()) {
+    Serial.println("Error initializing APDS-9960 sensor!");
+    }
+  
   // Security to check for failure on the temperature sensor.
   if (!HTS.begin())
   {
@@ -69,18 +71,63 @@ void setup()
 void loop()
 {
 
-Serial.println("---------------------------");
+Serial.println("\r\n\r\n\r\n\r\n\r\n\r\n\r\n---------------------------");
+
+  if (APDS.gestureAvailable()) {
+    // a gesture was detected, read and print to Serial Monitor
+    int gesture = APDS.readGesture();
+
+    switch (gesture) {
+      case GESTURE_UP:
+        Serial.println("Detected UP gesture");
+        break;
+
+      case GESTURE_DOWN:
+        Serial.println("Detected DOWN gesture");
+        break;
+
+      case GESTURE_LEFT:
+        Serial.println("Detected LEFT gesture");
+        break;
+
+      case GESTURE_RIGHT:
+        Serial.println("Detected RIGHT gesture");
+        break;
+
+      default:
+        // ignore
+        break;
+    }
+    Serial.println("---------------------------");
+  } else {
   float temperature = HTS.readTemperature();
   float humidity = HTS.readHumidity();
   float pressure = BARO.readPressure();
 
+  int proximity;
+  int r, g, b;
+
   bool accelAvailable;
   float accelX, accelY, accelZ;
   int degreesX, degreesY = 0;
+  
   if ((accelAvailable = IMU.accelerationAvailable()))
   {
     IMU.readAcceleration(accelX, accelY, accelZ);
   }
+
+  if (APDS.proximityAvailable()) {
+    // read the proximity
+    // - 0   => close
+    // - 255 => far
+    // - -1  => error
+    proximity = APDS.readProximity();
+  }
+
+  if ( APDS.colorAvailable()) {
+    APDS.readColor(r, g, b);
+  }
+  
 
   bool gyroAvailable;
   float gyroX, gyroY, gyroZ;
@@ -150,6 +197,11 @@ Serial.println("---------------------------");
     Serial.print(" degrees\r\n");
   }
 
+   // print value from proximity sensor
+   Serial.print("Proximity:\r\n");
+   Serial.print(proximity);
+   Serial.print(" <- (0 when close, 255 when far)\r\n");
+
   /* Checking the gyroscope values to print the board state. */
   if (gyroY > plusThreshold)
   {
@@ -181,13 +233,29 @@ Serial.println("---------------------------");
   // Writing the built in led with the magnetic field received value.
   analogWrite(LED_BUILTIN, ledvalue);
 
+    
+
+  // print the values
+  Serial.println("Color Detection:");
+  Serial.print("r = ");
+  Serial.println(r);
+  Serial.print("g = ");
+  Serial.println(g);
+  Serial.print("b = ");
+  Serial.println(b);
+
+
+
+
   // Reading the ultrasonic distance sensor.
   ultrasonic_value = analogRead(ULTRASONIC);
 
   // Reading the infrared sensors.
   infrared_1_value = analogRead(INFRARED_1);
   infrared_2_value = analogRead(INFRARED_2);
+  
   Serial.println("---------------------------");
-  // Wait one second to read all the sensor data again.
-  delay(2000);
+  
+}
+delay(500);
 }
