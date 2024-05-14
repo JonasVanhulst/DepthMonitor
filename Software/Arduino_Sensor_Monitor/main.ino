@@ -18,14 +18,17 @@
 #define SCREEN_ADDRESS 0x3C  // Display I2C address
 #define MAX_HEIGHT_PIXELS 48 // Definieer de maximale hoogte van de waterton in pixels
 
-#define IR_SENSOR A0           // Analog infrared sensor
+#define IR_SENSOR A7           // Analog infrared sensor
 #define ULTRASONIC A1          // Analog ultrasonic sensor
-#define RANGE_FINDER A7        // Analog range finder sensor
+#define RANGE_FINDER A0        // Analog range finder sensor
 #define BUTTON_SELECT_IR D2    // Select button for the infrared
 #define BUTTON_SELECT_RANGE D3 // Select button for the range finder sensor
 
 // Start with 0 liters
 int currentLiters = 0;
+const float tank_depth = 1.0;
+const float max_volume = 100.0;
+const float max_sensor_value = 1023.0; // Analog ultrasonic sensor max value
 
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
@@ -58,15 +61,15 @@ void loop()
   // bool button_state_ir = digitalRead(BUTTON_SELECT_IR);
   // bool button_state_range = digitalRead(BUTTON_SELECT_RANGE);
 
-  // float IR_Value = analogRead(IR_SENSOR);
-  // IR_Value to distance in cm (float)
-  // float IR_Converterd;
-  // float ultrasonic_value = analogRead(ULTRASONIC);
-  // ultrasonic_Value to distance in cm (float)
-  // float Ultrasonic_Converted;
-  // float range_value = analogRead(RANGE_FINDER);
-  // range_Value to distance in cm (float)
-  // float Range_Converted;
+  float IR_Value = analogRead(IR_SENSOR);
+  float IR_Converterd;
+
+  float ultrasonic_value = analogRead(ULTRASONIC);
+  float Ultrasonic_Converted = (tank_depth - (ultrasonic_value / max_sensor_value)) * max_volume;
+
+  float range_value = analogRead(RANGE_FINDER);
+  float distance_range_finder = (tank_depth - ((tank_depth - (range_value * tank_depth / max_sensor_value)) / tank_depth)) * max_volume;
+  Serial.println(distance_range_finder);
 
   /*
     int newLiters;
@@ -93,12 +96,10 @@ void loop()
   display.setCursor(0, 0);
   display.println("Water Tank Range");
 
-  int newLiters = random(0, 10);
-
   // Update water level only if it has changed
-  if (newLiters != currentLiters)
+  if (distance_range_finder != currentLiters)
   {
-    currentLiters = newLiters;
+    currentLiters = distance_range_finder;
     drawWaterTank(currentLiters);
     updateWaterLevel(currentLiters);
   }
@@ -113,7 +114,7 @@ void updateWaterLevel(int liters)
   display.fillRect(TANK_WIDTH, 20, SCREEN_WIDTH - TANK_WIDTH, MAX_HEIGHT_PIXELS, SSD1306_BLACK);
 
   // Calculate the height of the water level based on the liters
-  int waterHeight = map(liters, 0, 10, 0, MAX_HEIGHT_PIXELS);
+  int waterHeight = map(liters, 0, 100, 0, MAX_HEIGHT_PIXELS);
 
   // Draw the water level
   display.fillRect(TANK_WIDTH, 20 + (MAX_HEIGHT_PIXELS - waterHeight), SCREEN_WIDTH - TANK_WIDTH, waterHeight, SSD1306_WHITE);
