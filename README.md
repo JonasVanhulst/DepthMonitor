@@ -50,6 +50,9 @@ Through this process, the project not only achieved its practical goal of water 
 
 <!-- GETTING STARTED -->
 
+[![C](https://img.shields.io/badge/C-00599C?style=for-the-badge&logo=c&logoColor=white)](<https://en.wikipedia.org/wiki/C_(programming_language)>)
+[![Arduino](https://img.shields.io/badge/Arduino-00979D?style=for-the-badge&logo=arduino&logoColor=white)](https://www.arduino.cc/)
+
 ## Getting Started
 
 This section provides instructions on setting up the water tank monitoring project locally. Follow these simple steps to get a local copy up and running.

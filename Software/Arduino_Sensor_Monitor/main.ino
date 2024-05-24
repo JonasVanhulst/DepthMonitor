@@ -7,7 +7,13 @@
  * License: MIT LICENSE
  ******************************************/
 
+// General includes
 #include <Wire.h>
+
+// Arduino includes
+#include <Arduino_HTS221.h>
+
+// Adafruit includes
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 
@@ -26,7 +32,6 @@
 
 // Start with 0 liters
 int currentLiters = 0;
-const float tank_depth = 1.0;
 const float max_volume = 100.0;
 const float max_sensor_value = 1023.0; // Analog ultrasonic sensor max value
 
@@ -38,6 +43,22 @@ void setup()
   if (!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS))
   {
     Serial.println(F("SSD1306 allocation failed"));
+    for (;;)
+      ;
+  }
+
+  // Security to check for failure on the temperature sensor.
+  if (!HTS.begin())
+  {
+    Serial.println("Failed to initialize humidity & temperature sensor!");
+    for (;;)
+      ;
+  }
+
+  // Security to check for failure on the pressure sensor.
+  if (!BARO.begin())
+  {
+    Serial.println("Failed to initialize pressure sensor!");
     for (;;)
       ;
   }
@@ -58,48 +79,69 @@ void loop()
   display.setTextSize(1);
   display.setTextColor(SSD1306_WHITE);
 
-  // bool button_state_ir = digitalRead(BUTTON_SELECT_IR);
-  // bool button_state_range = digitalRead(BUTTON_SELECT_RANGE);
+  // Reading button states
+  bool button_state_ir = digitalRead(BUTTON_SELECT_IR);
+  bool button_state_range = digitalRead(BUTTON_SELECT_RANGE);
 
+  // Reading HTS sensor (temp & humidity)
+  float temperature = HTS.readTemperature();
+  float humidity = HTS.readHumidity();
+
+  // Reading the barometer
+  float pressure = BARO.readPressure();
+
+  // Reading infrared sensor & converting values
   float IR_Value = analogRead(IR_SENSOR);
+  Serial.println("IR:");
+  Serial.println(IR_Value);
+  // IR_Value to distance in cm (float)
   float IR_Converterd;
 
+  // Reading pepperl ultrasonic sensor & converting values
   float ultrasonic_value = analogRead(ULTRASONIC);
-  float Ultrasonic_Converted = (tank_depth - (ultrasonic_value / max_sensor_value)) * max_volume;
+  float Ultrasonic_Converted = (1.0 - (ultrasonic_value / max_sensor_value)) * max_volume; // need to be updated to jasper's formula
+  Serial.println("Ultrasonic:");
+  Serial.println(ultrasonic_value);
+  Serial.println(Ultrasonic_Converted);
 
+  // Reading the range finder & converting the values
   float range_value = analogRead(RANGE_FINDER);
-  float distance_range_finder = (tank_depth - ((tank_depth - (range_value * tank_depth / max_sensor_value)) / tank_depth)) * max_volume;
+  Serial.println("Range:");
+  Serial.println(range_value);
+  float distance_range_finder = (1.0 - ((1.0 - (range_value * 1.0 / 1023.0)) / 1.0)) * 100.0; // need to be updated to jasper's formula
   Serial.println(distance_range_finder);
 
-  /*
-    int newLiters;
-    if (button_state_ir) {
-      // Show ir value on display
-      display.setCursor(0, 0);
-      display.println("Water Tank Infrared");
-      newLiters = IR_Converted;
-    } else if (button_state_range) {
-      // Show range on display
-      // Display "Water Tank" text
-      display.setCursor(0, 0);
-      display.println("Water Tank Range finder");
-      newLiters = Range_Converted;
-    } else {
-      // Default is the ultrasonic showed on the display
-      display.setCursor(0, 0);
-      display.println("Water Tank Ultrasonic");
-      newLiters = Ultrasonic_Converted;
-    }
-  */
+  int newLiters;
+  if (button_state_ir)
+  {
+    // Show ir value on display
+    display.setCursor(0, 0);
+    display.println("Water Tank Infrared");
+    newLiters = IR_Converted;
+  }
+  else if (button_state_range)
+  {
+    // Show range on display
+    display.setCursor(0, 0);
+    display.println("Water Tank Range finder");
+    newLiters = distance_range_finder;
+  }
+  else
+  {
+    // Default is the ultrasonic showed on the display
+    display.setCursor(0, 0);
+    display.println("Water Tank Ultrasonic");
+    newLiters = Ultrasonic_Converted;
+  }
 
   // Display "Water Tank" text
   display.setCursor(0, 0);
   display.println("Water Tank Range");
 
   // Update water level only if it has changed
-  if (distance_range_finder != currentLiters)
+  if (newLiters != currentLiters)
   {
-    currentLiters = distance_range_finder;
+    currentLiters = newLiters;
     drawWaterTank(currentLiters);
     updateWaterLevel(currentLiters);
   }
