@@ -11,7 +11,10 @@
 #include <Wire.h>
 
 // Arduino includes
-#include <Arduino_HTS221.h>
+#include <Arduino_HTS221.h>   // Temp & humidity sensor
+#include <Arduino_LPS22HB.h>  // Barometer sensor
+#include <Arduino_LSM9DS1.h>  // IMU sensor
+#include <Arduino_APDS9960.h> // Proximity sensor
 
 // Adafruit includes
 #include <Adafruit_GFX.h>
@@ -27,14 +30,23 @@
 #define IR_SENSOR A7           // Analog infrared sensor
 #define ULTRASONIC A1          // Analog ultrasonic sensor
 #define RANGE_FINDER A0        // Analog range finder sensor
-#define BUTTON_SELECT_IR D2    // Select button for the infrared
-#define BUTTON_SELECT_RANGE D3 // Select button for the range finder sensor
+#define BUTTON_SELECT_IR D9    // Select button for the infrared
+#define BUTTON_SELECT_RANGE D8 // Select button for the range finder sensor
+
+// imu variables
+int r, g, b;                                  // color detection
+float gyroX, gyroY, gyroZ;                    // Gyroscope variables
+float accelX, accelY, accelZ;                 // Accelero variables
+float magX, magY, magZ, ledvalue;             // magnitude variables
+int degreesX, degreesY = 0;                   // Accelero degrees
+int plusThreshold = 30, minusThreshold = -30; // threshold values
 
 // Start with 0 liters
-int currentLiters = 0;
-const float max_volume = 100.0;
+int currentLiters = 0;                 // Starting at 0 liters
+const float max_volume = 100.0;        // Max tank volume
 const float max_sensor_value = 1023.0; // Analog ultrasonic sensor max value
 
+// Creating display object
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
 void setup()
@@ -63,6 +75,24 @@ void setup()
       ;
   }
 
+  // Security to check for failure on the imu sensor.
+  if (!IMU.begin())
+  {
+    Serial.println("Failed to initialize IMU!");
+    for (;;)
+      ;
+  }
+  // Security to check for failure on the proximity sensor.
+  if (!APDS.begin())
+  {
+    Serial.println("Error initializing APDS-9960 sensor!");
+  }
+
+  // Getting the sample rate from the accelero meter
+  Serial.print("Accelerometer sample rate = ");
+  Serial.print(IMU.accelerationSampleRate());
+  Serial.println("Hz");
+
   // Clear the buffer
   display.clearDisplay();
 
@@ -75,9 +105,41 @@ void setup()
 
 void loop()
 {
+  // proximity value
+  int proximity, gesture;
   // Set text size and color
   display.setTextSize(1);
   display.setTextColor(SSD1306_WHITE);
+
+  /**
+   * Checking on the on board sensor if they are available
+   */
+  if (APDS.gestureAvailable())
+  {
+    gesture = APDS.readGesture();
+  }
+  if (IMU.accelerationAvailable())
+  {
+    IMU.readAcceleration(accelX, accelY, accelZ);
+  }
+  if ((IMU.gyroscopeAvailable()))
+  {
+    IMU.readGyroscope(gyroX, gyroY, gyroZ);
+  }
+  if ((IMU.magneticFieldAvailable()))
+  {
+    IMU.readMagneticField(magX, magY, magZ);
+  }
+  if (APDS.proximityAvailable())
+  {
+    // - 0   => close, - 255 => far, -1  => error
+    proximity = APDS.readProximity();
+  }
+
+  if (APDS.colorAvailable())
+  {
+    APDS.readColor(r, g, b);
+  }
 
   // Reading button states
   bool button_state_ir = digitalRead(BUTTON_SELECT_IR);
@@ -145,6 +207,120 @@ void loop()
     drawWaterTank(currentLiters);
     updateWaterLevel(currentLiters);
   }
+
+  /* Checking the magnetic field data to assign its value to the ledvalue. */
+  if (magX < 0)
+  {
+    ledvalue = -(magX);
+  }
+  else
+  {
+    ledvalue = magX;
+  }
+
+  // Writing the built in led with the magnetic field received value.
+  analogWrite(LED_BUILTIN, ledvalue);
+
+  switch (gesture)
+  {
+  case GESTURE_UP:
+    Serial.println("\r\n\r\n\r\n\r\n\r\n\r\n\r\n---------------------------");
+    Serial.println("Detected UP gesture");
+    Serial.print("Temperatur: ");
+    Serial.print(temperature);
+    Serial.print(" °c\r\n");
+    Serial.print("humidity: ");
+    Serial.print(humidity);
+    Serial.print(" %\r\n");
+    Serial.print("Pressure: ");
+    Serial.print(pressure);
+    Serial.print(" hpa\r\n");
+    Serial.println("---------------------------");
+    break;
+
+  case GESTURE_DOWN:
+    Serial.println("\r\n\r\n\r\n\r\n\r\n\r\n\r\n---------------------------");
+    Serial.println("Detected DOWN gesture");
+    Serial.print("r = ");
+    Serial.println(r);
+    Serial.print("g = ");
+    Serial.println(g);
+    Serial.print("b = ");
+    Serial.println(b);
+    Serial.println("---------------------------");
+    break;
+
+  case GESTURE_LEFT:
+    Serial.println("\r\n\r\n\r\n\r\n\r\n\r\n\r\n---------------------------");
+    Serial.println("Detected LEFT gesture");
+    /* Checking the accerlero data to print the degrees at every board state.*/
+    if (accelX > 0.1)
+    {
+      accelX = 100 * accelX;
+      degreesX = map(accelX, 0, 97, 0, 90);
+      Serial.print("Tilting up ");
+      Serial.print(degreesX);
+      Serial.print(" degrees\r\n");
+    }
+
+    if (accelX < -0.1)
+    {
+      accelX = 100 * accelX;
+      degreesX = map(accelX, 0, -100, 0, 90);
+      Serial.print("Tilting down ");
+      Serial.print(degreesX);
+      Serial.print(" degrees\r\n");
+    }
+
+    if (accelY > 0.1)
+    {
+      accelY = 100 * accelY;
+      degreesY = map(accelY, 0, 97, 0, 90);
+      Serial.print("Tilting left ");
+      Serial.print(degreesY);
+      Serial.print(" degrees\r\n");
+    }
+
+    if (accelY < -0.1)
+    {
+      accelY = 100 * accelY;
+      degreesY = map(accelY, 0, -100, 0, 90);
+      Serial.print("Tilting right ");
+      Serial.print(degreesY);
+      Serial.print(" degrees\r\n");
+    }
+    Serial.println("---------------------------");
+    break;
+
+  case GESTURE_RIGHT:
+    Serial.println("\r\n\r\n\r\n\r\n\r\n\r\n\r\n---------------------------");
+    Serial.println("Detected RIGHT gesture");
+    /* Checking the gyroscope values to print the board state. */
+    if (gyroY > plusThreshold)
+    {
+      Serial.println("Collision front");
+    }
+    if (gyroY > minusThreshold)
+    {
+      Serial.println("Collision back");
+    }
+    if (gyroX < minusThreshold)
+    {
+      Serial.println("Collision right");
+    }
+    if (gyroY > plusThreshold)
+    {
+      Serial.println("Collision left");
+    }
+    Serial.println("---------------------------");
+    break;
+
+  default:
+    // ignore
+    break;
+  }
+
+  Serial.println("---------------------------");
 
   delay(1000); // Wait for 1 second before checking again
 }
