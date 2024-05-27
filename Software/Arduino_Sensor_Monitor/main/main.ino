@@ -1,3 +1,4 @@
+
 /******************************************
  * Company : PXL
  *
@@ -30,7 +31,7 @@
 #define IR_SENSOR A7           // Analog infrared sensor
 #define ULTRASONIC A1          // Analog ultrasonic sensor
 #define RANGE_FINDER A0        // Analog range finder sensor
-#define BUTTON_SELECT_IR D9    // Select button for the infrared
+#define BUTTON_SELECT_IR D12    // Select button for the infrared
 #define BUTTON_SELECT_RANGE D8 // Select button for the range finder sensor
 
 // imu variables
@@ -41,17 +42,20 @@ float magX, magY, magZ, ledvalue;             // magnitude variables
 int degreesX, degreesY = 0;                   // Accelero degrees
 int plusThreshold = 30, minusThreshold = -30; // threshold values
 
-// Start with 0 liters
-int currentLiters = 0;                 // Starting at 0 liters
-const float max_volume = 100.0;        // Max tank volume
-const float max_sensor_value = 1023.0; // Analog ultrasonic sensor max value
 
-// Creating display object
+// Start with 0 liters
+int currentLiters = 0;
+int lastGesture = -1;
+const float tank_depth = 1.0;
+const float max_volume = 100.0;
+const float max_sensor_value = 1023.0; // Analog ultrasonic sensor max value
+const float ofset = 0.2; //in meters
+
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
 void setup()
 {
-  // initialize with the I2C addr 0x3C (for the 128x64)
+    // initialize with the I2C addr 0x3C (for the 128x64)
   if (!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS))
   {
     Serial.println(F("SSD1306 allocation failed"));
@@ -87,7 +91,7 @@ void setup()
   {
     Serial.println("Error initializing APDS-9960 sensor!");
   }
-
+  APDS.setGestureSensitivity(90);
   // Getting the sample rate from the accelero meter
   Serial.print("Accelerometer sample rate = ");
   Serial.print(IMU.accelerationSampleRate());
@@ -111,11 +115,12 @@ void loop()
   display.setTextSize(1);
   display.setTextColor(SSD1306_WHITE);
 
-  /**
+/**
    * Checking on the on board sensor if they are available
    */
   if (APDS.gestureAvailable())
   {
+    
     gesture = APDS.readGesture();
   }
   if (IMU.accelerationAvailable())
@@ -148,57 +153,69 @@ void loop()
   // Reading HTS sensor (temp & humidity)
   float temperature = HTS.readTemperature();
   float humidity = HTS.readHumidity();
+  float IR_Converted;
 
   // Reading the barometer
   float pressure = BARO.readPressure();
 
+
   // Reading infrared sensor & converting values
   float IR_Value = analogRead(IR_SENSOR);
-  Serial.println("IR:");
-  Serial.println(IR_Value);
-  // IR_Value to distance in cm (float)
-  float IR_Converterd;
+  float IR_distance =  (IR_Value / 120) * 0.3; // max = 30 cm
+  IR_Converted = ( (tank_depth - IR_distance) / tank_depth ) * max_volume;
+  Serial.print("IR: ");
+  Serial.print(IR_distance);
+  Serial.println(" meters");
 
-  // Reading pepperl ultrasonic sensor & converting values
+
   float ultrasonic_value = analogRead(ULTRASONIC);
-  float Ultrasonic_Converted = (1.0 - (ultrasonic_value / max_sensor_value)) * max_volume; // need to be updated to jasper's formula
-  Serial.println("Ultrasonic:");
-  Serial.println(ultrasonic_value);
-  Serial.println(Ultrasonic_Converted);
+  float Ultrasonic_Distance =  (ultrasonic_value / max_sensor_value) * 6;
+  float Ultrasonic_Converted = (  (tank_depth - Ultrasonic_Distance) / tank_depth ) * max_volume;//(tank_depth - (ultrasonic_value / max_sensor_value)) * max_volume;
+  Serial.print("Ultrasonic: ");
+  Serial.print(Ultrasonic_Distance);
+  Serial.println(" meters");
+
 
   // Reading the range finder & converting the values
   float range_value = analogRead(RANGE_FINDER);
-  Serial.println("Range:");
-  Serial.println(range_value);
-  float distance_range_finder = (1.0 - ((1.0 - (range_value * 1.0 / 1023.0)) / 1.0)) * 100.0; // need to be updated to jasper's formula
-  Serial.println(distance_range_finder);
+  float distance_range_finder = ((range_value / 512) * 6.45); //(tank_depth - ((tank_depth - (range_value * tank_depth / max_sensor_value)) / tank_depth)) * max_volume;
+  float range_finder_converted = ((tank_depth - distance_range_finder )/ tank_depth) * max_volume;
+  Serial.print("Range finder: ");
+  Serial.print(distance_range_finder);
+  Serial.println(" meters");
 
   int newLiters;
   if (button_state_ir)
   {
     // Show ir value on display
     display.setCursor(0, 0);
+    display.clearDisplay();
+    Serial.println("+++ IR SELECTED +++");
     display.println("Water Tank Infrared");
-    newLiters = IR_Converted;
+    newLiters = IR_Converted;//IR_Converted;
   }
   else if (button_state_range)
   {
     // Show range on display
     display.setCursor(0, 0);
+    display.clearDisplay();
+    Serial.println("+++ RANGE SELECTED +++");
     display.println("Water Tank Range finder");
-    newLiters = distance_range_finder;
+    newLiters = range_finder_converted;
   }
   else
   {
     // Default is the ultrasonic showed on the display
     display.setCursor(0, 0);
+    display.clearDisplay();
+    Serial.println("+++ ULTRASONIC SELECTED +++");
     display.println("Water Tank Ultrasonic");
     newLiters = Ultrasonic_Converted;
   }
 
-  // Display "Water Tank" text
-  display.setCursor(0, 0);
-  display.println("Water Tank Range");
+  // // Display "Water Tank" text
+  // display.setCursor(0, 0);
+  // display.println("Water Tank");
 
   // Update water level only if it has changed
   if (newLiters != currentLiters)
@@ -208,7 +225,7 @@ void loop()
     updateWaterLevel(currentLiters);
   }
 
-  /* Checking the magnetic field data to assign its value to the ledvalue. */
+   /* Checking the magnetic field data to assign its value to the ledvalue. */
   if (magX < 0)
   {
     ledvalue = -(magX);
@@ -220,13 +237,20 @@ void loop()
 
   // Writing the built in led with the magnetic field received value.
   analogWrite(LED_BUILTIN, ledvalue);
+  Serial.print("GESTURE: ");
+  Serial.println(gesture);
+  
+  if (APDS.gestureAvailable()) {
+    // Lees de nieuwe gesture en sla deze op in lastGesture
+    lastGesture = APDS.readGesture();
+  }
 
-  switch (gesture)
+  switch (lastGesture)
   {
   case GESTURE_UP:
     Serial.println("\r\n\r\n\r\n\r\n\r\n\r\n\r\n---------------------------");
-    Serial.println("Detected UP gesture");
-    Serial.print("Temperatur: ");
+    Serial.println("Wheater mode:");
+    Serial.print("Temperature: ");
     Serial.print(temperature);
     Serial.print(" °c\r\n");
     Serial.print("humidity: ");
@@ -240,7 +264,7 @@ void loop()
 
   case GESTURE_DOWN:
     Serial.println("\r\n\r\n\r\n\r\n\r\n\r\n\r\n---------------------------");
-    Serial.println("Detected DOWN gesture");
+    Serial.println("RGB detection mode:");
     Serial.print("r = ");
     Serial.println(r);
     Serial.print("g = ");
@@ -252,7 +276,7 @@ void loop()
 
   case GESTURE_LEFT:
     Serial.println("\r\n\r\n\r\n\r\n\r\n\r\n\r\n---------------------------");
-    Serial.println("Detected LEFT gesture");
+    Serial.println("Tilt detection mode:");
     /* Checking the accerlero data to print the degrees at every board state.*/
     if (accelX > 0.1)
     {
@@ -294,7 +318,7 @@ void loop()
 
   case GESTURE_RIGHT:
     Serial.println("\r\n\r\n\r\n\r\n\r\n\r\n\r\n---------------------------");
-    Serial.println("Detected RIGHT gesture");
+    Serial.println("Collision mode:");
     /* Checking the gyroscope values to print the board state. */
     if (gyroY > plusThreshold)
     {
@@ -319,8 +343,9 @@ void loop()
     // ignore
     break;
   }
+  
 
-  Serial.println("---------------------------");
+
 
   delay(1000); // Wait for 1 second before checking again
 }
